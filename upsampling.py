@@ -6,9 +6,28 @@ from loader import load_mat
 import matplotlib.pyplot as plt
 import scipy
 
+MINIMUM_WAVELENGTH = 400
+MAXIMUM_WAVELENGTH = 700
+
 
 def main():
     spectral_pixels = load_data("./res/train/")
+    band_infos = [
+        {'wavelength': 400, 'sigma': 15},
+        {'wavelength': 480, 'sigma': 20},
+        {'wavelength': 530, 'sigma': 50},
+        {'wavelength': 610, 'sigma': 8},
+        {'wavelength': 660, 'sigma': 30},
+        {'wavelength': 710, 'sigma': 17},
+    ]
+
+    bands, wavelenghts = get_bands(band_infos)
+    for band in bands:
+        plt.plot(wavelenghts, band)
+    plt.xlabel('Wavelength')
+    plt.ylabel('Response')
+
+    plt.show()
 
 
 def load_data(directory) -> list:
@@ -26,23 +45,24 @@ def convert_to_selected_bands(spectral_pixel, bands):
     pass
 
 
-def get_band(wavelength, sigma):
-    x = np.linspace(-200 + wavelength, 200 + wavelength, 400)
-    y = np.exp(-(x - wavelength) ** 2 / (2 * sigma ** 2)) / (sigma * np.sqrt(2 * np.pi))
-    y = y / y.max()
-    return np.stack((x, y), axis=-1)
+def get_band(center_wavelength, sigma):
+    wavelenghts = np.linspace(MINIMUM_WAVELENGTH,
+                              MAXIMUM_WAVELENGTH,
+                              MAXIMUM_WAVELENGTH - MINIMUM_WAVELENGTH)
+    values = np.exp(-(wavelenghts - center_wavelength) ** 2 / (2 * sigma ** 2)) / (
+                sigma * np.sqrt(2 * np.pi))
+    values = values / values.max()
+    return values, wavelenghts
+
+
+def get_bands(band_infos):
+    bands = []
+    wavelengths = []
+    for band_info in band_infos:
+        band, wavelengths = get_band(band_info['wavelength'], band_info['sigma'])
+        bands.append(band)
+    return bands, wavelengths
 
 
 if __name__ == "__main__":
-    band1 = get_band(800, 2)
-    band2 = get_band(700, 10)
-    band3 = get_band(600, 30)
-    band4 = get_band(500, 20)
-    plt.plot(band1[:, 0], band1[:, 1])
-    plt.plot(band2[:, 0], band2[:, 1])
-    plt.plot(band3[:, 0], band3[:, 1])
-    plt.plot(band4[:, 0], band4[:, 1])
-    plt.xlabel('Wavelength')
-    plt.ylabel('Response')
-
-    plt.show()
+    main()
