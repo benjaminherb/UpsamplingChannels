@@ -1,9 +1,8 @@
 import os
-from typing import Tuple, List, Any, Union
 
 import numpy as np
-# from tensorflow import keras
-# import tensorflow as tf
+from tensorflow import keras
+import tensorflow as tf
 from loader import load_mat
 import matplotlib.pyplot as plt
 import scipy
@@ -34,6 +33,31 @@ def main():
     plt.plot(resampled_wavelengths, resampled_pixels[0])
     print(resample(np.ones(31), bands))
     plt.show()
+
+    input_layer = keras.layers.Input(shape=(6,))
+    hidden_layer1 = keras.layers.Dense(64, activation='relu')(input_layer)
+    hidden_layer2 = keras.layers.Dense(64, activation='relu')(hidden_layer1)
+    hidden_layer3 = keras.layers.Dense(31, activation='relu')(hidden_layer2)
+    output_layer = keras.layers.Dense(31, activation='softmax')(hidden_layer3)
+
+    model = keras.Model(inputs=input_layer, outputs=output_layer)
+    model.compile(optimizer='adam', loss=loss_function, metrics=['accuracy'])
+
+    model.fit(resampled_pixels, spectral_pixels, epochs=1, batch_size=64)
+
+    prediction = model.predict(resampled_pixels[1000, :])
+    print(prediction)
+    print(spectral_pixels[1000, :])
+    print(prediction - spectral_pixels[1000, :])
+
+    plt.plot(wavelengths, spectral_pixels[1000, :].squeeze())
+    plt.plot(wavelengths, prediction)
+    plt.savefig("test.png")
+
+
+def loss_function(ground_truth, prediction):
+    squared_difference = tf.square(ground_truth - prediction)
+    return tf.reduce_mean(squared_difference, axis=-1)
 
 
 def load_data(directory):
