@@ -25,14 +25,16 @@ def main():
         plt.plot(wavelengths, band)
     plt.xlabel('Wavelength')
     plt.ylabel('Response')
+    plt.savefig("camera_response.png")
 
-    plt.show()
-    plt.plot(wavelengths, spectral_pixels[0].squeeze())
     resampled_pixels = resample(spectral_pixels, bands)
     resampled_wavelengths = [band_info['wavelength'] for band_info in band_infos]
-    plt.plot(resampled_wavelengths, resampled_pixels[0])
-    print(resample(np.ones(31), bands))
-    plt.show()
+
+    # split some for testing
+    test_spectral_pixels = spectral_pixels[-100:,:]
+    test_resampled_pixels = resampled_pixels[-100:,:]
+    spectral_pixels = spectral_pixels[:-100,:]
+    resampled_pixels = resampled_pixels[:-100,:]
 
     input_layer = keras.layers.Input(shape=(6,))
     hidden_layer1 = keras.layers.Dense(64, activation='relu')(input_layer)
@@ -41,18 +43,23 @@ def main():
     output_layer = keras.layers.Dense(31, activation='softmax')(hidden_layer3)
 
     model = keras.Model(inputs=input_layer, outputs=output_layer)
-    model.compile(optimizer='adam', loss=loss_function, metrics=['accuracy'])
+    optimizer = keras.optimizers.Adam(learning_rate=1.0)
+    model.compile(optimizer=optimizer, loss=loss_function, metrics=['MeanSquaredError', 'RootMeanSquaredError'])
 
-    model.fit(resampled_pixels, spectral_pixels, epochs=1, batch_size=64)
+    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=3, batch_size=64)
+    model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
-    prediction = model.predict(resampled_pixels[1000, :])
+    pos = 17
+    prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1,6))
     print(prediction)
-    print(spectral_pixels[1000, :])
-    print(prediction - spectral_pixels[1000, :])
+    print(test_spectral_pixels[pos, :])
+    print(prediction.flatten() - test_spectral_pixels[pos, :].squeeze())
 
-    plt.plot(wavelengths, spectral_pixels[1000, :].squeeze())
-    plt.plot(wavelengths, prediction)
-    plt.savefig("test.png")
+    plt.figure()
+    plt.plot(wavelengths, spectral_pixels[pos, :].squeeze(), label='Spectral')
+    plt.plot(wavelengths, prediction.flatten(), label='Prediction')
+    plt.legend()
+    plt.savefig(f"test_{pos}.png")
 
 
 def loss_function(ground_truth, prediction):
