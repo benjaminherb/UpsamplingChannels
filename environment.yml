@@ -3,6 +3,7 @@ dependencies:
   - python=3.9
   - pip
   - h5py
+  - pandas
   - pip:
     - matplotlib
     - tensorflow
