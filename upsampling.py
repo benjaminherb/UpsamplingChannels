@@ -7,61 +7,21 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import scipy
 
-from loader import load_mat, load_observer
+from loader import load_mat, load_observer, load_data
+from bands import get_bands, get_test_band_infos
+from processing import resample
 
 
 def main():
-    if not os.path.isdir("./out"):
-        os.mkdir("./out")
-    output_directory = os.path.join("./out", datetime.now().strftime("%y%m%d_%H%M%S"))
-    os.mkdir(os.path.join(output_directory))
-
     spectral_pixels, wavelengths = load_data("./res/train/")
-    np.random.shuffle(spectral_pixels)  # reorder to get a diverse test/validate set
 
-    band_infos_six = [
-        {'wavelength': 425, 'sigma': 30},
-        {'wavelength': 475, 'sigma': 30},
-        {'wavelength': 525, 'sigma': 30},
-        {'wavelength': 575, 'sigma': 30},
-        {'wavelength': 625, 'sigma': 30},
-        {'wavelength': 675, 'sigma': 30},
-    ]
-
-    band_infos_five = [
-        {'wavelength': 420, 'sigma': 30},
-        {'wavelength': 485, 'sigma': 30},
-        {'wavelength': 550, 'sigma': 30},
-        {'wavelength': 615, 'sigma': 30},
-        {'wavelength': 680, 'sigma': 30},
-    ]
-    band_infos_four = [
-        {'wavelength': 430, 'sigma': 30},
-        {'wavelength': 510, 'sigma': 30},
-        {'wavelength': 590, 'sigma': 30},
-        {'wavelength': 670, 'sigma': 30},
-    ]
-    band_infos_three = [
-        {'wavelength': 450, 'sigma': 30},
-        {'wavelength': 550, 'sigma': 30},
-        {'wavelength': 650, 'sigma': 30},
-    ]
-
-    band_infos = band_infos_three
+    band_infos = get_test_band_infos("3")
     band_count = len(band_infos)
 
     bands = get_bands(band_infos, wavelengths)
-    for band in bands:
-        plt.plot(wavelengths, band)
-    plt.xlabel('Wavelength')
-    plt.ylabel('Response')
-    plt.savefig(f"camera_response_{band_count}_bands.png")
 
     resampled_pixels = resample(spectral_pixels, bands)
     resampled_wavelengths = [band_info['wavelength'] for band_info in band_infos]
-
-    spectral_pixels = spectral_pixels[:-100, :]
-    resampled_pixels = resampled_pixels[:-100, :]
 
     input_layer = keras.layers.Input(shape=(band_count,))
     hidden_layer1 = keras.layers.Dense(32, activation='relu')(input_layer)
@@ -73,43 +33,54 @@ def main():
     model.compile(optimizer=optimizer, loss=loss_function,
                   metrics=['RootMeanSquaredError'])
 
-    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=10, batch_size=1024)
+    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=5, batch_size=1024)
 
     # load test images
-    test_spectral_pixels, wavelengths = load_data("./res/test")
-    test_resampled_pixels = resample(test_spectral_pixels, bands)
+    # test_spectral_pixels, wavelengths = load_data("./res/test")
+    # test_resampled_pixels = resample(test_spectral_pixels, bands)
+    # model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
-    model.evaluate(test_resampled_pixels, test_spectral_pixels)
+    # Evaluation
+    if not os.path.isdir("./out"):
+        os.mkdir("./out")
+    output_directory = os.path.join(
+        "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{band_count}_bands")
+    os.mkdir(os.path.join(output_directory))
 
-    for pos in [0, 100, 1000, 10000, 100000]:
-        prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1, band_count)).flatten()
-        ground_truth = test_spectral_pixels[pos, :].squeeze()
-        plt.figure()
-        plt.plot(wavelengths, ground_truth, label='Ground Truth')
-        plt.plot(wavelengths, prediction, label='Prediction')
-        plt.legend()
-        plt.savefig(os.path.join(
-            output_directory,
-            f"test_prediction_{band_count}_bands_{pos}_{np.mean(tf.square(ground_truth - prediction)):.8f}.png"))
+    test_directory = "./res/test"
+    for file_name in os.listdir(test_directory):
+        name = os.path.splitext(file_name)[0]
+        # ground truth
+        ground_truth_spectral, wavelengths = load_mat(os.path.join(test_directory, file_name))
+        ground_truth_xyz = resample(ground_truth_spectral, load_observer(wavelengths))
 
-    test_spectral_image, wavelengths = load_mat("./res/test/ARAD_1K_0059.mat")
-    test_spectral_image_flat = test_spectral_image.reshape(-1, test_spectral_image.shape[-1])
-    test_ground_truth_rgb_image_flat = resample(test_spectral_image_flat,
-                                                load_observer(wavelengths))
-    test_ground_truth_rgb_image = test_ground_truth_rgb_image_flat.reshape(
-        (test_spectral_image.shape[0], test_spectral_image.shape[1], 3))
-    plt.imsave("test_ground_truth_rgb_image.png",
-               test_ground_truth_rgb_image / test_ground_truth_rgb_image.max())
+        # prediction
+        resampled = resample(ground_truth_spectral, bands)
+        prediction_spectral = predict_image(resampled, model)
+        prediction_xyz = resample(prediction_spectral, load_observer(wavelengths))
 
-    # Prediction
-    test_resampled_image_flat = resample(test_spectral_image_flat, bands)
-    test_predicted_spectral_image_flat = model.predict(test_resampled_image_flat)
-    test_predicted_rgb_image_flat = resample(test_predicted_spectral_image_flat, load_observer(wavelengths))
-    test_predicted_rgb_image = test_predicted_rgb_image_flat.reshape(
-        (test_spectral_image.shape[0], test_spectral_image.shape[1], 3))
-    plt.imsave("test_predicted_rgb_image.png",
-               test_predicted_rgb_image / test_predicted_rgb_image.max())
+        max_value = max(ground_truth_xyz.max(), prediction_xyz.max())
+        plt.imsave(os.path.join(
+            output_directory, f"{name}_xyz_ground_truth.png"), ground_truth_xyz / max_value)
+        plt.imsave(os.path.join(
+            output_directory, f"{name}_xyz_prediction.png"), prediction_xyz / max_value)
 
+        # plot mean
+        save_plot(wavelengths, np.mean(ground_truth_spectral, axis=(0, 1)),
+                  np.mean(prediction_spectral, axis=(0, 1)),
+                  os.path.join(output_directory, f"{name}_spectral_mean.png"))
+
+        # plot example pixel
+        pos = 42
+        save_plot(wavelengths, ground_truth_spectral[pos, pos, :],
+                  prediction_spectral[pos, pos, :],
+                  os.path.join(output_directory, f"{name}_spectral_{pos}_{pos}"))
+
+    for band in bands:
+        plt.plot(wavelengths, band)
+    plt.xlabel('Wavelength')
+    plt.ylabel('Response')
+    plt.savefig(os.path.join(output_directory, "camera_response.png"))
 
 
 def loss_function(ground_truth, prediction):
@@ -117,40 +88,17 @@ def loss_function(ground_truth, prediction):
     return tf.reduce_mean(squared_difference, axis=-1)
 
 
-def load_data(directory):
-    spectral_pixels, wavelengths = (np.empty((0, 31)), [])
-    for file in os.listdir(directory):
-        print(file)
-        spectral_image, wavelengths = load_mat(os.path.join(directory, file))
-        flat_spectral_image = spectral_image.reshape(-1, spectral_image.shape[-1])
-        spectral_pixels = np.vstack((spectral_pixels, flat_spectral_image))
-
-    return spectral_pixels, wavelengths
+def predict_image(image, model):
+    prediction = model.predict(image.reshape(-1, image.shape[-1]))
+    return prediction.reshape((image.shape[0], image.shape[1], prediction.shape[1]))
 
 
-def get_band(center_wavelength, sigma, wavelengths):
-    values = np.exp(-(wavelengths - center_wavelength) ** 2 / (2 * sigma ** 2)) / (
-            sigma * np.sqrt(2 * np.pi))
-    return values
-
-
-def get_bands(band_infos, wavelengths):
-    bands = []
-    for band_info in band_infos:
-        band = get_band(band_info['wavelength'], band_info['sigma'], wavelengths)
-        bands.append(band)
-
-    # scale all bands so the sum over all values is one
-    bands = np.array(bands) \
-            * (wavelengths[-1] - wavelengths[0]) / len(wavelengths)
-    return bands
-
-
-def resample(spectral_pixels, bands):
-    # Assumes the bands and pixel bands match
-    if len(spectral_pixels.shape) == 1:  # for single pixels
-        return np.sum(spectral_pixels * bands, axis=1)
-    return np.sum((spectral_pixels[:, np.newaxis, :] * bands), axis=2)
+def save_plot(wavelengths, ground_truth, prediction, path):
+    plt.figure()
+    plt.plot(wavelengths, ground_truth, label='Ground Truth')
+    plt.plot(wavelengths, prediction, label='Prediction')
+    plt.legend()
+    plt.savefig(path)
 
 
 if __name__ == "__main__":

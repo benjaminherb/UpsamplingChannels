@@ -23,3 +23,11 @@ def load_observer(wavelengths, interpolation_method="linear"):
 
     return observer.transpose() # return (3,31) array, same as bands
 
+def load_data(directory):
+    spectral_pixels, wavelengths = (np.empty((0, 31)), [])
+    for file in os.listdir(directory):
+        spectral_image, wavelengths = load_mat(os.path.join(directory, file))
+        flat_spectral_image = spectral_image.reshape(-1, spectral_image.shape[-1])
+        spectral_pixels = np.vstack((spectral_pixels, flat_spectral_image))
+
+    return spectral_pixels, wavelengths
