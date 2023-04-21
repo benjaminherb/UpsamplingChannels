@@ -25,7 +25,7 @@ def train(spectral_pixels, bands):
     model.compile(optimizer=optimizer, loss=loss_function,
                   metrics=['RootMeanSquaredError'])
 
-    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=5, batch_size=1024)
+    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=10, batch_size=1024)
 
     return model
 
@@ -36,11 +36,12 @@ def evaluate(model, bands, test_directory):
     # test_resampled_pixels = resample(test_spectral_pixels, bands)
     # model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
+    band_count = bands.shape[0]
     # Evaluation
     if not os.path.isdir("../out"):
         os.mkdir("../out")
     output_directory = os.path.join(
-        "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{bands.shape[0]}_bands")
+        "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{band_count}_bands")
     os.mkdir(os.path.join(output_directory))
 
     for file_name in os.listdir(test_directory):
@@ -58,24 +59,26 @@ def evaluate(model, bands, test_directory):
         plt.imsave(os.path.join(
             output_directory, f"{name}_xyz_ground_truth.png"), ground_truth_xyz / max_value)
         plt.imsave(os.path.join(
-            output_directory, f"{name}_xyz_prediction.png"), prediction_xyz / max_value)
+            output_directory, f"{name}_xyz_prediction_{band_count}.png"), prediction_xyz / max_value)
 
         # plot mean
         save_plot(wavelengths, np.mean(ground_truth_spectral, axis=(0, 1)),
                   np.mean(prediction_spectral, axis=(0, 1)),
-                  os.path.join(output_directory, f"{name}_spectral_mean.png"))
+                  os.path.join(output_directory, f"{name}_spectral_mean_{band_count}.png"))
 
         # plot example pixel
         pos = 42
         save_plot(wavelengths, ground_truth_spectral[pos, pos, :],
                   prediction_spectral[pos, pos, :],
-                  os.path.join(output_directory, f"{name}_spectral_{pos}_{pos}"))
+                  os.path.join(output_directory, f"{name}_spectral_{pos}_{pos}_{band_count}"))
 
+    plt.figure()
     for band in bands:
         plt.plot(wavelengths, band)
     plt.xlabel('Wavelength')
     plt.ylabel('Response')
-    plt.savefig(os.path.join(output_directory, "camera_response.png"))
+    plt.savefig(os.path.join(output_directory, f"camera_response_{band_count}.png"))
+    plt.close()
 
 
 def loss_function(ground_truth, prediction):
@@ -94,3 +97,4 @@ def save_plot(wavelengths, ground_truth, prediction, path):
     plt.plot(wavelengths, prediction, label='Prediction')
     plt.legend()
     plt.savefig(path)
+    plt.close()
