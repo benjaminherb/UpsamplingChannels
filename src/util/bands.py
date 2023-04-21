@@ -21,7 +21,7 @@ test_band_infos = {
 
     "3": [{'wavelength': 450, 'sigma': 30},
           {'wavelength': 550, 'sigma': 30},
-          {'wavelength': 550, 'sigma': 30}]
+          {'wavelength': 650, 'sigma': 30}]
 }
 
 
