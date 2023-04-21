@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 import numpy as np
 from tensorflow import keras
@@ -9,15 +10,21 @@ import scipy
 
 
 def main():
+    if not os.path.isdir("./out"):
+        os.mkdir("./out")
+    output_directory = os.path.join("./out", datetime.now().strftime("%y%m%d_%H%M%S"))
+    os.mkdir(os.path.join(output_directory))
+
     spectral_pixels, wavelengths = load_data("./res/train/")
+    np.random.shuffle(spectral_pixels) # reorder to get a diverse test/validate set
 
     band_infos = [
-        {'wavelength': 400, 'sigma': 15},
-        {'wavelength': 480, 'sigma': 20},
-        {'wavelength': 530, 'sigma': 50},
-        {'wavelength': 610, 'sigma': 8},
-        {'wavelength': 660, 'sigma': 30},
-        {'wavelength': 710, 'sigma': 17},
+        {'wavelength': 425, 'sigma': 30},
+        {'wavelength': 475, 'sigma': 30},
+        {'wavelength': 525, 'sigma': 30},
+        {'wavelength': 575, 'sigma': 30},
+        {'wavelength': 625, 'sigma': 30},
+        {'wavelength': 675, 'sigma': 30},
     ]
 
     bands = get_bands(band_infos, wavelengths)
@@ -31,35 +38,34 @@ def main():
     resampled_wavelengths = [band_info['wavelength'] for band_info in band_infos]
 
     # split some for testing
-    test_spectral_pixels = spectral_pixels[-100:,:]
-    test_resampled_pixels = resampled_pixels[-100:,:]
-    spectral_pixels = spectral_pixels[:-100,:]
-    resampled_pixels = resampled_pixels[:-100,:]
+    test_spectral_pixels = spectral_pixels[-100:, :]
+    test_resampled_pixels = resampled_pixels[-100:, :]
+    spectral_pixels = spectral_pixels[:-100, :]
+    resampled_pixels = resampled_pixels[:-100, :]
 
     input_layer = keras.layers.Input(shape=(6,))
-    hidden_layer1 = keras.layers.Dense(64, activation='relu')(input_layer)
+    hidden_layer1 = keras.layers.Dense(32, activation='relu')(input_layer)
     hidden_layer2 = keras.layers.Dense(64, activation='relu')(hidden_layer1)
-    hidden_layer3 = keras.layers.Dense(31, activation='relu')(hidden_layer2)
-    output_layer = keras.layers.Dense(31, activation='softmax')(hidden_layer3)
+    output_layer = keras.layers.Dense(31, activation='linear')(hidden_layer2)
 
     model = keras.Model(inputs=input_layer, outputs=output_layer)
-    optimizer = keras.optimizers.Adam(learning_rate=1.0)
-    model.compile(optimizer=optimizer, loss=loss_function, metrics=['MeanSquaredError', 'RootMeanSquaredError'])
+    optimizer = keras.optimizers.Adam(learning_rate=0.1)
+    model.compile(optimizer=optimizer, loss=loss_function,
+                  metrics=['MeanSquaredError', 'RootMeanSquaredError'])
 
-    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=3, batch_size=64)
+    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=1, batch_size=64)
     model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
-    pos = 17
-    prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1,6))
-    print(prediction)
-    print(test_spectral_pixels[pos, :])
-    print(prediction.flatten() - test_spectral_pixels[pos, :].squeeze())
-
-    plt.figure()
-    plt.plot(wavelengths, spectral_pixels[pos, :].squeeze(), label='Spectral')
-    plt.plot(wavelengths, prediction.flatten(), label='Prediction')
-    plt.legend()
-    plt.savefig(f"test_{pos}.png")
+    for pos in [0, 25, 50, 75, 99]:
+        prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1, 6)).flatten()
+        ground_truth = test_spectral_pixels[pos, :].squeeze()
+        plt.figure()
+        plt.plot(wavelengths, ground_truth, label='Ground Truth')
+        plt.plot(wavelengths, prediction, label='Prediction')
+        plt.legend()
+        plt.savefig(os.path.join(
+            output_directory,
+            f"test_prediction_{pos}_{np.mean(tf.square(ground_truth - prediction)):.6f}.png"))
 
 
 def loss_function(ground_truth, prediction):
@@ -80,7 +86,6 @@ def load_data(directory):
 def get_band(center_wavelength, sigma, wavelengths):
     values = np.exp(-(wavelengths - center_wavelength) ** 2 / (2 * sigma ** 2)) / (
             sigma * np.sqrt(2 * np.pi))
-    values = values  # / values.max()
     return values
 
 
@@ -101,6 +106,11 @@ def resample(spectral_pixels, bands):
     if len(spectral_pixels.shape) == 1:  # for single pixels
         return np.sum(spectral_pixels * bands, axis=1)
     return np.sum((spectral_pixels[:, np.newaxis, :] * bands), axis=2)
+
+
+def shuffle_along_axis(array, axis):
+    indices = np.random.rand(*array.shape).argsort(axis=axis)
+    return np.take_along_axis(array, indices, axis=axis)
 
 
 if __name__ == "__main__":
