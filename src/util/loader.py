@@ -15,7 +15,7 @@ def load_mat(path):
 
 def load_observer(wavelengths, interpolation_method="linear"):
     observer_data = pd.read_csv('./res/observer/CIE_xyz_1931_2deg.csv', index_col=0,
-                       header=None)
+                                header=None)
     interpolation_function = scipy.interpolate.interp1d(
         observer_data.index.values, observer_data.values, axis=0,
         kind=interpolation_method, fill_value=0, bounds_error=False)

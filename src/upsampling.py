@@ -5,23 +5,15 @@ import numpy as np
 from tensorflow import keras
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import scipy
 
-from loader import load_mat, load_observer, load_data
-from bands import get_bands, get_test_band_infos
-from processing import resample
+from src.util.loader import load_mat, load_observer
+from src.util.processing import resample
 
 
-def main():
-    spectral_pixels, wavelengths = load_data("./res/train/")
+def train(spectral_pixels, bands):
 
-    band_infos = get_test_band_infos("3")
-    band_count = len(band_infos)
-
-    bands = get_bands(band_infos, wavelengths)
-
+    band_count = bands.shape[0]
     resampled_pixels = resample(spectral_pixels, bands)
-    resampled_wavelengths = [band_info['wavelength'] for band_info in band_infos]
 
     input_layer = keras.layers.Input(shape=(band_count,))
     hidden_layer1 = keras.layers.Dense(32, activation='relu')(input_layer)
@@ -35,19 +27,22 @@ def main():
 
     model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=5, batch_size=1024)
 
+    return model
+
+
+def evaluate(model, bands, test_directory):
     # load test images
     # test_spectral_pixels, wavelengths = load_data("./res/test")
     # test_resampled_pixels = resample(test_spectral_pixels, bands)
     # model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
     # Evaluation
-    if not os.path.isdir("./out"):
-        os.mkdir("./out")
+    if not os.path.isdir("../out"):
+        os.mkdir("../out")
     output_directory = os.path.join(
-        "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{band_count}_bands")
+        "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{bands.shape[0]}_bands")
     os.mkdir(os.path.join(output_directory))
 
-    test_directory = "./res/test"
     for file_name in os.listdir(test_directory):
         name = os.path.splitext(file_name)[0]
         # ground truth
@@ -99,7 +94,3 @@ def save_plot(wavelengths, ground_truth, prediction, path):
     plt.plot(wavelengths, prediction, label='Prediction')
     plt.legend()
     plt.savefig(path)
-
-
-if __name__ == "__main__":
-    main()
