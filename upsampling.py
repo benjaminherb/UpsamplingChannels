@@ -18,7 +18,7 @@ def main():
     spectral_pixels, wavelengths = load_data("./res/train/")
     np.random.shuffle(spectral_pixels) # reorder to get a diverse test/validate set
 
-    band_infos = [
+    band_infos_six = [
         {'wavelength': 425, 'sigma': 30},
         {'wavelength': 475, 'sigma': 30},
         {'wavelength': 525, 'sigma': 30},
@@ -26,6 +26,28 @@ def main():
         {'wavelength': 625, 'sigma': 30},
         {'wavelength': 675, 'sigma': 30},
     ]
+
+    band_infos_five = [
+        {'wavelength': 420, 'sigma': 30},
+        {'wavelength': 485, 'sigma': 30},
+        {'wavelength': 550, 'sigma': 30},
+        {'wavelength': 615, 'sigma': 30},
+        {'wavelength': 680, 'sigma': 30},
+    ]
+    band_infos_four = [
+        {'wavelength': 430, 'sigma': 30},
+        {'wavelength': 510, 'sigma': 30},
+        {'wavelength': 590, 'sigma': 30},
+        {'wavelength': 670, 'sigma': 30},
+    ]
+    band_infos_three = [
+        {'wavelength': 450, 'sigma': 30},
+        {'wavelength': 550, 'sigma': 30},
+        {'wavelength': 650, 'sigma': 30},
+    ]
+
+    band_infos = band_infos_three
+    band_count = len(band_infos)
 
     bands = get_bands(band_infos, wavelengths)
     for band in bands:
@@ -43,21 +65,21 @@ def main():
     spectral_pixels = spectral_pixels[:-100, :]
     resampled_pixels = resampled_pixels[:-100, :]
 
-    input_layer = keras.layers.Input(shape=(6,))
+    input_layer = keras.layers.Input(shape=(band_count,))
     hidden_layer1 = keras.layers.Dense(32, activation='relu')(input_layer)
     hidden_layer2 = keras.layers.Dense(64, activation='relu')(hidden_layer1)
     output_layer = keras.layers.Dense(31, activation='linear')(hidden_layer2)
 
     model = keras.Model(inputs=input_layer, outputs=output_layer)
-    optimizer = keras.optimizers.Adam(learning_rate=0.1)
+    optimizer = keras.optimizers.Adam(learning_rate=0.001)
     model.compile(optimizer=optimizer, loss=loss_function,
-                  metrics=['MeanSquaredError', 'RootMeanSquaredError'])
+                  metrics=['RootMeanSquaredError'])
 
-    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=1, batch_size=64)
+    model.fit(resampled_pixels, spectral_pixels, validation_split=0.2, epochs=10, batch_size=1024)
     model.evaluate(test_resampled_pixels, test_spectral_pixels)
 
     for pos in [0, 25, 50, 75, 99]:
-        prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1, 6)).flatten()
+        prediction = model.predict(test_resampled_pixels[pos, :].reshape(-1, band_count)).flatten()
         ground_truth = test_spectral_pixels[pos, :].squeeze()
         plt.figure()
         plt.plot(wavelengths, ground_truth, label='Ground Truth')
@@ -65,7 +87,7 @@ def main():
         plt.legend()
         plt.savefig(os.path.join(
             output_directory,
-            f"test_prediction_{pos}_{np.mean(tf.square(ground_truth - prediction)):.6f}.png"))
+            f"test_prediction_{band_count}_bands_{pos}_{np.mean(tf.square(ground_truth - prediction)):.8f}.png"))
 
 
 def loss_function(ground_truth, prediction):
