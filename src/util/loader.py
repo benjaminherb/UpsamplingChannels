@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import scipy
 
+from processing import xyY_to_XYZ
+
 
 def load_mat(path):
     with h5py.File(path, 'r') as mat:
@@ -31,3 +33,19 @@ def load_data(directory):
         spectral_pixels = np.vstack((spectral_pixels, flat_spectral_image))
 
     return spectral_pixels, wavelengths
+
+def load_primaries(name):
+    primaries = {}
+    if name == "sRGB":
+        primaries['red'] = xyY_to_XYZ(0.6400, 0.3300, 0.212656)
+        primaries['green'] = xyY_to_XYZ(0.3000, 0.6000, 0.715158)
+        primaries['blue'] = xyY_to_XYZ(0.1500, 0.0600, 0.072186)
+
+    return primaries
+
+
+def load_whitepoint(name):
+    whitepoint = []
+    if name == "D65":
+        whitepoint = xyY_to_XYZ(0.3127, 0.3290, 1.0000)
+    return whitepoint

@@ -6,7 +6,7 @@ from src.util.loader import load_data
 def main():
     # prepare data
     spectral_pixels, wavelengths = load_data("./res/train/")
-    band_infos = get_test_band_infos("3")
+    band_infos = get_test_band_infos("6")
     bands = get_bands(band_infos, wavelengths)
 
     # train model
