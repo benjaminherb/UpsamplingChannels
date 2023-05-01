@@ -4,8 +4,6 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from processing import xyY_to_XYZ
-
 
 def load_mat(path):
     with h5py.File(path, 'r') as mat:
@@ -15,6 +13,7 @@ def load_mat(path):
             bands = np.array(mat['bands']).squeeze()
     return spectral_image, bands
 
+
 def load_observer(wavelengths, interpolation_method="linear"):
     observer_data = pd.read_csv('./res/observer/CIE_xyz_1931_2deg.csv', index_col=0,
                                 header=None)
@@ -23,7 +22,8 @@ def load_observer(wavelengths, interpolation_method="linear"):
         kind=interpolation_method, fill_value=0, bounds_error=False)
     observer = interpolation_function(wavelengths)
 
-    return observer.transpose() # return (3,31) array, same as bands
+    return observer.transpose()  # return (3,31) array, same as bands
+
 
 def load_data(directory):
     spectral_pixels, wavelengths = (np.empty((0, 31)), [])
@@ -33,6 +33,7 @@ def load_data(directory):
         spectral_pixels = np.vstack((spectral_pixels, flat_spectral_image))
 
     return spectral_pixels, wavelengths
+
 
 def load_primaries(name):
     primaries = {}
@@ -49,3 +50,12 @@ def load_whitepoint(name):
     if name == "D65":
         whitepoint = xyY_to_XYZ(0.3127, 0.3290, 1.0000)
     return whitepoint
+
+
+def xyY_to_XYZ(x, y, Y):
+    # http://www.brucelindbloom.com/index.html?Eqn_Spect_to_XYZ.html
+    if y == 0:
+        return 0, 0, 0
+    X = x * Y / y
+    Z = (1 - x - y) * Y / y
+    return X, Y, Z

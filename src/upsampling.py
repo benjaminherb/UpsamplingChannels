@@ -5,13 +5,13 @@ import numpy as np
 from tensorflow import keras
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import colour
 
 from src.util.loader import load_mat, load_observer
-from src.util.processing import resample
+from src.util.processing import resample, XYZ_to_RGB, linear_to_sRGB
 
 
 def train(spectral_pixels, bands):
-
     band_count = bands.shape[0]
     resampled_pixels = resample(spectral_pixels, bands)
 
@@ -43,28 +43,44 @@ def evaluate(model, bands, test_directory):
     output_directory = os.path.join(
         "./out", f"{datetime.now().strftime('%y%m%d_%H%M%S')}_{band_count}_bands")
     os.mkdir(os.path.join(output_directory))
+    model.save(os.path.join(output_directory, "model"))
 
     for file_name in os.listdir(test_directory):
         name = os.path.splitext(file_name)[0]
+
         # ground truth
         ground_truth_spectral, wavelengths = load_mat(os.path.join(test_directory, file_name))
         ground_truth_xyz = resample(ground_truth_spectral, load_observer(wavelengths))
+        ground_truth_rgb = XYZ_to_RGB(ground_truth_xyz)
+        ground_truth_rgb = ground_truth_rgb - ground_truth_rgb.min()
 
         # prediction
         resampled = resample(ground_truth_spectral, bands)
         prediction_spectral = predict_image(resampled, model)
         prediction_xyz = resample(prediction_spectral, load_observer(wavelengths))
+        prediction_rgb = XYZ_to_RGB(prediction_xyz)
+        prediction_rgb = prediction_rgb - prediction_rgb.min()
 
-        max_value = max(ground_truth_xyz.max(), prediction_xyz.max())
+        # scaling
+        max_value = max(ground_truth_rgb.max(), prediction_rgb.max())
+        ground_truth_rgb = linear_to_sRGB(ground_truth_rgb / max_value)
+        prediction_rgb = linear_to_sRGB(prediction_rgb / max_value)
+
+        delta_E = colour.delta_E(colour.XYZ_to_Lab(ground_truth_xyz),
+                                 colour.XYZ_to_Lab(prediction_xyz),
+                                 method='CIE 2000')
+
         plt.imsave(os.path.join(
-            output_directory, f"{name}_xyz_ground_truth.png"), ground_truth_xyz / max_value)
+            output_directory, f"{name}_rgb_ground_truth.png"), ground_truth_rgb)
         plt.imsave(os.path.join(
-            output_directory, f"{name}_xyz_prediction_{band_count}.png"), prediction_xyz / max_value)
+            output_directory, f"{name}_rgb_prediction_{band_count}.png"),
+            prediction_rgb)
 
         # plot mean
         save_plot(wavelengths, np.mean(ground_truth_spectral, axis=(0, 1)),
                   np.mean(prediction_spectral, axis=(0, 1)),
-                  os.path.join(output_directory, f"{name}_spectral_mean_{band_count}.png"))
+                  os.path.join(output_directory, f"{name}_spectral_mean_{band_count}.png"),
+                  delta_E)
 
         # plot example pixel
         pos = 42
@@ -91,10 +107,15 @@ def predict_image(image, model):
     return prediction.reshape((image.shape[0], image.shape[1], prediction.shape[1]))
 
 
-def save_plot(wavelengths, ground_truth, prediction, path):
+def save_plot(wavelengths, ground_truth, prediction, path, delta_E=None):
     plt.figure()
     plt.plot(wavelengths, ground_truth, label='Ground Truth')
     plt.plot(wavelengths, prediction, label='Prediction')
+    if delta_E is not None:
+        plt.title(
+            f"ΔE(2000): {np.mean(delta_E):.6f} (mean) / {delta_E.min():.6f} (min) / {delta_E.max():.6f} (max)")
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Value [0-1]")
     plt.legend()
     plt.savefig(path)
     plt.close()

@@ -70,10 +70,3 @@ def get_XYZ_to_RGB_matrix(primaries, whitepoint):
     return np.linalg.inv(get_RGB_to_XYZ_matrix(primaries, whitepoint))
 
 
-def xyY_to_XYZ(x, y, Y):
-    # http://www.brucelindbloom.com/index.html?Eqn_Spect_to_XYZ.html
-    if y == 0:
-        return 0, 0, 0
-    X = x * Y / y
-    Z = (1 - x - y) * Y / y
-    return X, Y, Z
